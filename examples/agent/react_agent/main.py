@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""The main entry point of the ReAct agent example."""
+"""ReAct Agent 示例的主入口。"""
 import asyncio
 import os
 
@@ -16,7 +16,7 @@ from agentscope.tool import (
 
 
 async def main() -> None:
-    """The main entry point for the ReAct agent example."""
+    """ReAct Agent 示例主函数。"""
     toolkit = Toolkit()
 
     toolkit.register_tool_function(execute_shell_command)

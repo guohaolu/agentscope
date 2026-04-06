@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""The main entry for the A2A agent example."""
+"""A2A Agent 示例的主入口。"""
 import asyncio
 
 from agent_card import agent_card
@@ -8,8 +8,7 @@ from agentscope.agent import UserAgent, A2AAgent
 
 
 async def main() -> None:
-    """The main entry for the example, where we build a simple conversation
-    between the A2A agent and the user."""
+    """示例主函数，用于构造用户与 A2A Agent 之间的简单对话。"""
 
     user = UserAgent("user")
 

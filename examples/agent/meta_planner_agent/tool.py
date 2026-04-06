@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""The tool functions used in the planner example."""
+"""规划型 Agent 示例中使用的工具函数。"""
 import asyncio
 import json
 import os
@@ -24,9 +24,7 @@ from agentscope.tool import (
 
 
 class ResultModel(BaseModel):
-    """
-    The result model used for the sub worker to summarize the task result.
-    """
+    """子 Worker 用于总结任务结果的结构化模型。"""
 
     success: bool = Field(
         description="Whether the task was successful or not.",
@@ -41,9 +39,9 @@ class ResultModel(BaseModel):
 
 
 def _convert_to_text_block(msgs: list[Msg]) -> list[TextBlock]:
-    # Collect all the content blocks
+    # 收集全部内容块
     blocks: list = []
-    # Convert tool_use block into text block for streaming tool response
+    # 将 tool_use 块转换为文本块，便于工具流式输出展示
     for _ in msgs:
         for block in _.get_content_blocks():
             if block["type"] == "text":
@@ -63,20 +61,19 @@ def _convert_to_text_block(msgs: list[Msg]) -> list[TextBlock]:
 async def create_worker(
     task_description: str,
 ) -> AsyncGenerator[ToolResponse, None]:
-    """Create a sub-worker to finish the given task.
+    """创建一个子 Worker 来完成指定任务。
 
     Args:
         task_description (`str`):
-            The description of the task to be done by the sub-worker, should
-            contain all the necessary information.
+            交给子 Worker 执行的任务描述，应包含所需的全部必要信息。
 
     Returns:
         `AsyncGenerator[ToolResponse, None]`:
-            An async generator yielding ToolResponse objects.
+            一个异步生成器，用于持续产出 ToolResponse 对象。
     """
     toolkit = Toolkit()
 
-    # Gaode MCP client
+    # 高德地图 MCP 客户端
     if os.getenv("GAODE_API_KEY"):
         toolkit.create_tool_group(
             group_name="amap_tools",
@@ -91,11 +88,10 @@ async def create_worker(
         await toolkit.register_mcp_client(client, group_name="amap_tools")
     else:
         print(
-            "Warning: GAODE_API_KEY not set in environment, skipping Gaode "
-            "MCP client registration.",
+            "警告：环境变量中未设置 GAODE_API_KEY，跳过高德 MCP 客户端注册。",
         )
 
-    # Browser MCP client
+    # 浏览器 MCP 客户端
     toolkit.create_tool_group(
         group_name="browser_tools",
         description="Web browsing related tools.",
@@ -111,7 +107,7 @@ async def create_worker(
         group_name="browser_tools",
     )
 
-    # GitHub MCP client
+    # GitHub MCP 客户端
     if os.getenv("GITHUB_TOKEN"):
         toolkit.create_tool_group(
             group_name="github_tools",
@@ -131,16 +127,15 @@ async def create_worker(
 
     else:
         print(
-            "Warning: GITHUB_TOKEN not set in environment, skipping GitHub "
-            "MCP client registration.",
+            "警告：环境变量中未设置 GITHUB_TOKEN，跳过 GitHub MCP 客户端注册。",
         )
 
-    # Basic read/write tools
+    # 基础读写工具
     toolkit.register_tool_function(write_text_file)
     toolkit.register_tool_function(insert_text_file)
     toolkit.register_tool_function(view_text_file)
 
-    # Create a new sub-agent to finish the given task
+    # 创建新的子 Agent 来完成指定任务
     sub_agent = ReActAgent(
         name="Worker",
         sys_prompt=f"""You're an agent named Worker.
@@ -161,14 +156,13 @@ You MUST use the `{ReActAgent.finish_function_name}` to generate the final answe
         max_iters=20,
     )
 
-    # disable the console output of the sub-agent
+    # 关闭子 Agent 的控制台输出
     sub_agent.set_console_output_enabled(False)
 
-    # Collect the execution process content
+    # 收集执行过程中的消息内容
     msgs = OrderedDict()
 
-    # Wrap the sub-agent in a coroutine task to obtain the final
-    # structured output
+    # 将子 Agent 封装为协程任务，以便获得最终结构化输出
     result = []
 
     async def call_sub_agent() -> None:
@@ -190,7 +184,7 @@ You MUST use the `{ReActAgent.finish_function_name}` to generate the final answe
     ):
         msgs[msg.id] = msg
 
-        # Collect all the content blocks
+        # 收集当前所有内容块
         yield ToolResponse(
             content=_convert_to_text_block(
                 list(msgs.values()),
@@ -199,11 +193,11 @@ You MUST use the `{ReActAgent.finish_function_name}` to generate the final answe
             is_last=False,
         )
 
-        # Expose the interruption signal to the caller
+        # 向调用方暴露中断信号
         if msg.metadata and msg.metadata.get("_is_interrupted", False):
             raise asyncio.CancelledError()
 
-    # Obtain the last message from the coroutine task
+    # 从协程任务中取回最终结果
     if result:
         yield ToolResponse(
             content=[

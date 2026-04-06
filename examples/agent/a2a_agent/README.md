@@ -1,47 +1,48 @@
-# Agent-to-Agent Protocol Example
+# Agent-to-Agent 协议示例
 
-The `A2AAgent` in AgentScope is an A2A client that connects to an external agent server via the Agent-to-Agent (A2A) protocol.
-This example demonstrates how to set up and use the `A2AAgent` to interact with an agent hosted on an A2A server.
+AgentScope 中的 `A2AAgent` 是一个 A2A 客户端，它通过 Agent-to-Agent（A2A）协议连接到外部 Agent 服务端。
+这个示例演示了如何配置并使用 `A2AAgent`，与部署在 A2A 服务端上的 Agent 进行交互。
 
-Note the A2A feature is experimental and subject to change, and due to the limitations of A2A protocol, the `A2AAgent`
-currently
+需要注意的是，A2A 功能目前仍属于实验性能力，未来可能会调整。并且由于 A2A 协议本身的限制，`A2AAgent` 当前存在以下约束：
 
-1. only supports chatbot scenarios, where only a user and an agent are involved
-2. does not support realtime steering/interruption during the conversation
-3. does not support agentic structured outputs
-4. stores the observed messages locally and send them together with the input message(s) of the `reply` function
+1. 仅支持聊天机器人场景，也就是只包含用户和单个 Agent 的对话
+2. 不支持会话过程中的实时接管或中断
+3. 不支持 Agent 风格的结构化输出
+4. 会将已观察到的消息保存在本地，并在调用 `reply` 函数时与新的输入消息一起发送
 
-## Files
+## 文件说明
 
-The example contains the following files:
+本示例包含以下文件：
 
-```
+```text
 examples/agent/a2a_agent
-├── main.py                  # The main script to run the A2A agent example
-├── setup_a2a_server.py      # The script to set up a simple A2A server
-├── agent_card.py            # The agent card definition for the A2A agent
-└── README.md                # This README file
+├── main.py                  # 运行 A2A Agent 示例的主脚本
+├── setup_a2a_server.py      # 启动一个简单 A2A 服务端的脚本
+├── agent_card.py            # A2A Agent 的 agent card 定义
+└── README.md                # 当前说明文档
 ```
 
-## Setup
+## 环境准备
 
-This example provides a simple setup to demonstrate how to use the `A2AAgent` in AgentScope.
-First you need to install the required dependencies:
+这个示例提供了一个最小可运行配置，用来展示如何在 AgentScope 中使用 `A2AAgent`。
+首先安装依赖：
 
 ```bash
 uv pip install a2a-sdk[http-server] agentscope[a2a]
-#  or
+# 或
 pip install a2a-sdk[http-server] agentscope[a2a]
 ```
 
-Then we first set up a simple A2A server that hosts a ReAct agent:
+然后启动一个承载 ReAct Agent 的简单 A2A 服务端：
+
 ```bash
 uvicorn setup_a2a_server:app --host 0.0.0.0 --port 8000
 ```
-This will start an A2A server locally on port 8000.
 
-After that, you can run the A2A agent example to run a chatbot conversation with the agent hosted on the A2A server:
+这会在本地 `8000` 端口启动 A2A 服务。
+
+之后运行下面的命令，即可通过 A2A Agent 与服务端上的 Agent 进行聊天：
+
 ```bash
 python main.py
 ```
-

@@ -1,48 +1,49 @@
-# Browser Agent Example
+# Browser Agent 示例
 
-This example demonstrates how to use AgentScope's BrowserAgent for web automation tasks. The BrowserAgent leverages the Model Context Protocol (MCP) to interact with browser tools powered by Playwright, enabling sophisticated web navigation, data extraction, and automation.
+这个示例演示了如何使用 AgentScope 的 `BrowserAgent` 完成网页自动化任务。`BrowserAgent` 通过 Model Context Protocol（MCP）连接由 Playwright 驱动的浏览器工具，从而实现网页导航、信息提取和自动化操作。
 
+## 前置条件
 
-## Prerequisites
+- Python 3.10 或更高版本
+- Node.js 和 npm（用于启动 MCP 服务）
+- 阿里云 DashScope API Key
 
-- Python 3.10 or higher
-- Node.js and npm (for the MCP server)
-- DashScope API key from Alibaba Cloud
+## 安装
 
-## Installation
-
-### Install AgentScope
+### 安装 AgentScope
 
 ```bash
-# Install from source
+# 从源码安装
 cd {PATH_TO_AGENTSCOPE}
 pip install -e .
 ```
 
-## Setup
+## 配置
 
-### 1. Environment Configuration
+### 1. 环境变量
 
-Set up your DashScope API key:
+设置 DashScope API Key：
 
 ```bash
 export DASHSCOPE_API_KEY="your_dashscope_api_key_here"
 ```
 
-You can obtain a DashScope API key from [Alibaba Cloud DashScope Console](https://dashscope.console.aliyun.com/).
+你可以从 [阿里云 DashScope 控制台](https://dashscope.console.aliyun.com/) 获取 API Key。
 
-### 2. About PlayWright MCP Server
+### 2. 关于 PlayWright MCP 服务
 
-Before running the browser agent, you can test whether you can start the Playwright MCP server:
+在运行 Browser Agent 之前，可以先测试本地是否能正常启动 Playwright MCP 服务：
 
 ```bash
 npx @playwright/mcp@latest
 ```
 
-## Usage
+## 使用方式
 
-### Basic Example
-You can start running the browser agent in your terminal with the following command
+### 基础示例
+
+执行以下命令启动 Browser Agent：
+
 ```bash
 cd examples/agent/browser_agent
 python main.py

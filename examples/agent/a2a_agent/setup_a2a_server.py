@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Set up an A2A server with a ReAct agent to handle the input query"""
+"""启动一个由 ReAct Agent 提供服务的 A2A 服务端，用于处理输入请求。"""
 import os
 import uuid
 from typing import AsyncGenerator, Any
@@ -29,8 +29,7 @@ from agentscope.tool import (
 
 
 class SimpleStreamHandler:
-    """A simple request handler that handles the input query by an
-    ReAct agent."""
+    """一个简单的请求处理器，使用 ReAct Agent 处理输入请求。"""
 
     async def on_message_send_stream(
         self,  # pylint: disable=unused-argument
@@ -38,28 +37,27 @@ class SimpleStreamHandler:
         *args: Any,
         **kwargs: Any,
     ) -> AsyncGenerator[Event, None]:
-        """Handles the message_send method by the agent
+        """处理 Agent 发起的 message_send 请求。
 
         Args:
             params (`MessageSendParams`):
-                The parameters for sending the message.
+                发送消息时使用的参数。
 
         Returns:
             `AsyncGenerator[Event, None]`:
-                An asynchronous generator that yields task status update
-                events.
+                一个异步生成器，用于持续产出任务状态更新事件。
         """
         task_id = params.message.task_id or uuid.uuid4().hex
         context_id = params.message.context_id or "default-context"
-        # ============ Agent Logic ============
+        # ============ Agent 逻辑 ============
 
-        # Register the tool functions
+        # 注册工具函数
         toolkit = Toolkit()
         toolkit.register_tool_function(execute_python_code)
         toolkit.register_tool_function(execute_shell_command)
         toolkit.register_tool_function(view_text_file)
 
-        # Create the agent instance
+        # 创建 Agent 实例
         agent = ReActAgent(
             name="Friday",
             sys_prompt="You're a helpful assistant named Friday.",
@@ -77,7 +75,7 @@ class SimpleStreamHandler:
             agent=agent,
         )
 
-        # Convert the A2A message to AgentScope Msg objects
+        # 将 A2A 消息转换为 AgentScope 的 Msg 对象
         formatter = A2AChatFormatter()
         as_msg = await formatter.format_a2a_message(
             name="Friday",
@@ -95,8 +93,8 @@ class SimpleStreamHandler:
             agents=[agent],
             coroutine_task=agent(as_msg),
         ):
-            # The A2A streaming response is one complete Message object rather
-            # than accumulated or incremental text
+            # A2A 的流式响应是一条完整的 Message 对象，
+            # 而不是逐步累积的文本片段
             if last:
                 a2a_message = await formatter.format([msg])
 
@@ -110,7 +108,7 @@ class SimpleStreamHandler:
                     final=False,
                 )
 
-        # Finish the task
+        # 结束任务
         yield TaskStatusUpdateEvent(
             task_id=task_id,
             context_id=context_id,

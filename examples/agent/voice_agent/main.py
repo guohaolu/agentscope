@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-A ReAct agent example that demonstrates audio output capability.
-Note: When audio output is enabled, tool calling functionality may be disabled.
+一个用于演示音频输出能力的 ReAct Agent 示例。
+注意：启用音频输出后，工具调用功能可能会失效。
 """
 import asyncio
 import os
@@ -13,7 +13,7 @@ from agentscope.model import OpenAIChatModel
 
 
 async def main() -> None:
-    """The main entry point for the ReAct audio agent example."""
+    """ReAct 语音 Agent 示例的主函数。"""
 
     agent = ReActAgent(
         name="Friday",
@@ -26,7 +26,7 @@ async def main() -> None:
             },
             api_key=os.getenv("DASHSCOPE_API_KEY"),
             stream=True,
-            # More options can be found in the DashScope API docs:
+            # 更多配置项可参考 DashScope API 文档：
             # https://help.aliyun.com/zh/model-studio/qwen-omni
             generate_kwargs={
                 "modalities": ["text", "audio"],

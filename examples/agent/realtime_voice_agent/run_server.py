@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""A test server"""
+"""实时语音 Agent 示例服务端。"""
 import asyncio
 import os
 import traceback
@@ -31,14 +31,14 @@ app = FastAPI()
 
 @app.get("/")
 async def get() -> FileResponse:
-    """Serve the HTML test page."""
+    """返回前端测试页面。"""
     html_path = Path(__file__).parent / "chatbot.html"
     return FileResponse(html_path)
 
 
 @app.get("/api/check-models")
 async def check_models() -> dict:
-    """Check which model API keys are available in environment variables."""
+    """检查环境变量中哪些模型 API Key 可用。"""
     return {
         "dashscope": bool(os.getenv("DASHSCOPE_API_KEY")),
         "gemini": bool(os.getenv("GEMINI_API_KEY")),
@@ -50,12 +50,12 @@ async def frontend_receive(
     websocket: WebSocket,
     frontend_queue: asyncio.Queue,
 ) -> None:
-    """Forward the message received from the agent to the frontend."""
+    """将 Agent 返回的消息转发到前端。"""
     try:
         while True:
             msg: ServerEvents.EventBase = await frontend_queue.get()
 
-            # Send the message as JSON
+            # 以 JSON 形式发送消息
             await websocket.send_json(msg.model_dump())
 
     except Exception as e:
@@ -69,7 +69,7 @@ async def single_agent_endpoint(
     user_id: str,
     session_id: str,
 ) -> None:
-    """WebSocket endpoint for a single realtime agent."""
+    """单个实时 Agent 的 WebSocket 接口。"""
     try:
         await websocket.accept()
 
@@ -79,18 +79,17 @@ async def single_agent_endpoint(
             session_id,
         )
 
-        # Create the queue to forward messages to the frontend
+        # 创建用于转发前端消息的队列
         frontend_queue = asyncio.Queue()
         asyncio.create_task(
             frontend_receive(websocket, frontend_queue),
         )
 
-        # Create the realtime agent
+        # 创建实时 Agent
         agent = None
 
         while True:
-            # Handle the incoming messages from the frontend
-            # i.e. ClientEvents
+            # 处理前端传入的消息，也就是 ClientEvents
             data = await websocket.receive_json()
 
             client_event = ClientEvents.from_json(data)
@@ -99,7 +98,7 @@ async def single_agent_endpoint(
                 client_event,
                 ClientEvents.ClientSessionCreateEvent,
             ):
-                # Create the agent by the given session arguments
+                # 根据会话参数创建 Agent
                 instructions = client_event.config.get(
                     "instructions",
                     "You're a helpful assistant.",
@@ -112,7 +111,7 @@ async def single_agent_endpoint(
 
                 sys_prompt = instructions
 
-                # Create toolkit with tools for models that support them
+                # 为支持工具调用的模型创建工具箱
                 toolkit = None
                 if model_provider in ["gemini", "openai"]:
                     toolkit = Toolkit()
@@ -120,7 +119,7 @@ async def single_agent_endpoint(
                     toolkit.register_tool_function(execute_shell_command)
                     toolkit.register_tool_function(view_text_file)
 
-                # Create the appropriate model based on provider
+                # 根据模型提供商创建对应模型
                 if model_provider == "dashscope":
                     model = DashScopeRealtimeModel(
                         model_name="qwen3-omni-flash-realtime",
@@ -143,7 +142,7 @@ async def single_agent_endpoint(
                         f"Unsupported model provider: {model_provider}",
                     )
 
-                # Create the agent
+                # 创建 Agent
                 agent = RealtimeAgent(
                     name=agent_name,
                     sys_prompt=sys_prompt,
@@ -153,7 +152,7 @@ async def single_agent_endpoint(
 
                 await agent.start(frontend_queue)
 
-                # Send session_created event to frontend
+                # 向前端发送 session_created 事件
                 await websocket.send_json(
                     ServerEvents.ServerSessionCreatedEvent(
                         session_id=session_id,
@@ -164,7 +163,7 @@ async def single_agent_endpoint(
                 )
 
             elif client_event.type == ClientEventType.CLIENT_SESSION_END:
-                # End the session with the agent
+                # 结束当前 Agent 会话
                 if agent:
                     await agent.stop()
                     agent = None

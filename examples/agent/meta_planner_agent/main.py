@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""The planner agent example."""
+"""规划型 Agent 示例。"""
 import asyncio
 import os
 
@@ -13,8 +13,8 @@ from agentscope.tool import Toolkit
 
 
 async def main() -> None:
-    """The main function."""
-    # Connect to the studio for better visualization (optional)
+    """示例主函数。"""
+    # 可选：连接 AgentScope Studio，获得更好的可视化效果
     # import agentscope
     # agentscope.init(
     #     project="meta_planner_agent",

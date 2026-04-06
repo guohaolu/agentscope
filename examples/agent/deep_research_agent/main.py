@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""The main entry point of the Deep Research agent example."""
+"""Deep Research Agent 示例的主入口。"""
 import asyncio
 import os
 
@@ -14,7 +14,7 @@ from agentscope.mcp import StdIOStatefulClient
 
 
 async def main(user_query: str) -> None:
-    """The main entry point for the Deep Research agent example."""
+    """Deep Research Agent 示例主函数。"""
     logger.setLevel("DEBUG")
 
     tavily_search_client = StdIOStatefulClient(

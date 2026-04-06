@@ -1,22 +1,19 @@
-# ReAct Agent Example
+# ReAct Agent 示例
 
-This example showcases a **ReAct** agent in AgentScope. Specifically, the ReAct agent will discuss with the user in
-an alternative manner, i.e., chatbot style. It is equipped with a suite of tools to assist in answering user queries.
+这个示例展示了 AgentScope 中的 **ReAct Agent**。在这个例子里，ReAct Agent 会以聊天机器人的方式与用户交互，并借助一组工具来辅助回答问题。
 
-> 💡 Tip: Try ``Ctrl+C`` to interrupt the agent's reply to experience the realtime steering/interruption feature!
+> 提示：你可以尝试按 `Ctrl+C` 中断 Agent 的回复，体验实时接管 / 中断能力。
 
-## Quick Start
+## 快速开始
 
-Ensure you have installed agentscope and set ``DASHSCOPE_API_KEY`` in your environment variables.
+请先确保已经安装 `agentscope`，并在环境变量中设置好 `DASHSCOPE_API_KEY`。
 
-Run the following commands to set up and run the example:
+运行以下命令启动示例：
 
 ```bash
 python main.py
 ```
 
-> Note:
-> - The example is built with DashScope chat model. If you want to change the model used in this example, don't
-> forget to change the formatter at the same time! The corresponding relationship between built-in models and
-> formatters are list in [our tutorial](https://doc.agentscope.io/tutorial/task_prompt.html#id1)
-> - For local models, ensure the model service (like Ollama) is running before starting the agent.
+> 说明：
+> - 这个示例基于 DashScope 对话模型构建。如果你要替换成其他模型，记得同时调整 formatter。内置模型与 formatter 的对应关系可以参考[教程](https://doc.agentscope.io/tutorial/task_prompt.html#id1)。
+> - 如果使用本地模型，请先确认对应模型服务（例如 Ollama）已经启动。

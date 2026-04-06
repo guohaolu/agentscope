@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=too-many-lines
-"""The main entry point of the browser agent example."""
+"""Browser Agent 示例的主入口。"""
 import asyncio
 import os
 import sys
@@ -17,7 +17,7 @@ from agentscope.agent import UserAgent
 
 
 class FinalResult(BaseModel):
-    """A structured result model for structured output."""
+    """用于结构化输出的结果模型。"""
 
     result: str = Field(
         description="The final result to the initial user query",
@@ -28,8 +28,8 @@ async def main(
     start_url_param: str = "https://www.google.com",
     max_iters_param: int = 50,
 ) -> None:
-    """The main entry point for the browser agent example."""
-    # Setup toolkit with browser tools from MCP server
+    """Browser Agent 示例主函数。"""
+    # 使用 MCP 服务提供的浏览器工具初始化工具箱
     toolkit = Toolkit()
     browser_client = StdIOStatefulClient(
         name="playwright-mcp",
@@ -38,7 +38,7 @@ async def main(
     )
 
     try:
-        # Connect to the browser client
+        # 连接浏览器客户端
         await browser_client.connect()
         await toolkit.register_mcp_client(browser_client)
 
@@ -67,72 +67,70 @@ async def main(
 
     except Exception as e:
         traceback.print_exc()
-        print(f"An error occurred: {e}")
-        print("Cleaning up browser client...")
+        print(f"发生错误：{e}")
+        print("正在清理浏览器客户端资源...")
     finally:
-        # Ensure browser client is always closed,
-        # regardless of success or failure
+        # 无论执行成功还是失败，都确保浏览器客户端被关闭
         try:
             await browser_client.close()
-            print("Browser client closed successfully.")
+            print("浏览器客户端已成功关闭。")
         except Exception as cleanup_error:
-            print(f"Error while closing browser client: {cleanup_error}")
+            print(f"关闭浏览器客户端时出错：{cleanup_error}")
 
 
 def parse_arguments() -> argparse.Namespace:
-    """Parse command line arguments."""
+    """解析命令行参数。"""
     parser = argparse.ArgumentParser(
-        description="Browser Agent Example with configurable reply method",
+        description="支持自定义参数的 Browser Agent 示例",
     )
     parser.add_argument(
         "--start-url",
         type=str,
         default="https://www.google.com",
         help=(
-            "Starting URL for the browser agent "
-            "(default: https://www.google.com)"
+            "Browser Agent 的起始网址 "
+            "（默认值：https://www.google.com）"
         ),
     )
     parser.add_argument(
         "--max-iters",
         type=int,
         default=50,
-        help="Maximum number of iterations (default: 50)",
+        help="最大迭代次数（默认值：50）",
     )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    print("Starting Browser Agent Example...")
+    print("正在启动 Browser Agent 示例...")
     print(
-        "The browser agent will use "
-        "playwright-mcp (https://github.com/microsoft/playwright-mcp)."
-        "Make sure the MCP server is installed "
-        "by `npx @playwright/mcp@latest`",
+        "该示例将使用 "
+        "playwright-mcp（https://github.com/microsoft/playwright-mcp）。"
+        "请先通过 `npx @playwright/mcp@latest` 确认 MCP 服务可用。",
     )
-    print("\nUsage examples:")
-    print("  python main.py                           # Start with defaults")
+    print("\n使用示例：")
+    print("  python main.py                           # 使用默认参数启动")
     print("  python main.py --start-url https://example.com --max-iters 100")
-    print("  python main.py --help                   # Show all options")
+    print("  python main.py --help                   # 查看全部参数说明")
     print()
 
-    # Parse command line arguments
+    # 解析命令行参数
     args = parse_arguments()
 
-    # Get other parameters
+    # 读取参数
     start_url = args.start_url
     max_iters = args.max_iters
 
-    # Validate parameters
+    # 校验参数
     if max_iters <= 0:
-        print("Error: max-iters must be positive")
+        print("错误：max-iters 必须为正整数")
         sys.exit(1)
 
     if not start_url.startswith(("http://", "https://")):
-        print("Error: start-url must be a valid HTTP/HTTPS URL")
+        print("错误：start-url 必须是合法的 HTTP/HTTPS URL")
         sys.exit(1)
 
-    print(f"Starting URL: {start_url}")
-    print(f"Maximum iterations: {max_iters}")
+    print(f"起始 URL：{start_url}")
+    print(f"最大迭代次数：{max_iters}")
 
     asyncio.run(main(start_url, max_iters))

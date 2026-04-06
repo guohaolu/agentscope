@@ -1,86 +1,87 @@
-# Realtime Voice Agent Example
+# Realtime Voice Agent 示例
 
-This example demonstrates how to build a **real-time voice conversation agent** using AgentScope's RealtimeAgent. The agent supports bidirectional voice streaming, enabling natural voice conversations with low latency and real-time audio transcription.
+这个示例演示了如何使用 AgentScope 的 `RealtimeAgent` 构建一个**实时语音对话 Agent**。它支持双向语音流传输，因此可以实现低延迟、自然的语音交互，并支持实时语音转写。
 
-## Prerequisites
+## 前置条件
 
-- Python 3.10 or higher
-- Your DashScope API key in an environment variable `DASHSCOPE_API_KEY`
+- Python 3.10 或更高版本
+- 已在环境变量中设置 `DASHSCOPE_API_KEY`
 
-Install the required packages:
+安装依赖：
 
 ```bash
 uv pip install agentscope fastapi uvicorn websockets
-# or
+# 或
 # pip install agentscope
 ```
 
-## Usage
+## 使用方式
 
-### 1. Start the Server
+### 1. 启动服务端
 
-Run the FastAPI server:
+运行 FastAPI 服务：
 
 ```bash
 cd examples/agent/realtime_voice_agent
 python run_server.py
 ```
 
-The server will start on `http://localhost:8000` by default.
+默认会启动在 `http://localhost:8000`。
 
-### 2. Open the Web Interface
+### 2. 打开网页界面
 
-Open your web browser and navigate to:
+在浏览器中访问：
 
-```
+```text
 http://localhost:8000
 ```
 
-You will see a web interface with:
-- Configuration panel (instructions and user name)
-- Voice control buttons (Start Recording, Stop Recording, Disconnect)
-- Video recording button (Start Video Recording)
-- Text input field
-- Message display area
-- Video preview area (when video recording is active)
+你会看到一个网页界面，其中包含：
 
-### 3. Start Conversation
+- 配置面板（指令和用户名）
+- 语音控制按钮（开始录音、停止录音、断开连接）
+- 视频录制按钮
+- 文本输入框
+- 消息显示区域
+- 视频预览区域（开启视频录制时显示）
 
-1. **Configure the Agent** (optional):
-   - Modify the "Instructions" to customize the agent's behavior
-   - Enter your name in the "User Name" field
+### 3. 开始对话
 
-2. **Start Voice Recording**:
-   - Click the "🎤 Start Recording" button
-   - Allow microphone access when prompted by your browser
-   - Speak naturally to the agent
-   - The agent will respond with voice and text
+1. **配置 Agent**（可选）：
+   - 修改 “Instructions” 来定制 Agent 行为
+   - 在 “User Name” 输入你的名字
 
-3. **Stop Recording**:
-   - Click "⏹️ Stop Recording" to pause voice input
+2. **开始语音录制**：
+   - 点击“开始录音”按钮
+   - 按浏览器提示授权麦克风权限
+   - 自然地对 Agent 说话
+   - Agent 会返回语音和文本响应
 
-4. **Video Recording** (Optional):
-   - Click the "📹 Start Video Recording" button to start video recording
-   - Allow camera access when prompted by your browser
-   - The system will automatically capture and send video frames to the server at 1 frame per second (1 fps)
-   - A video preview will be displayed while recording
-   - Click "🔴 Stop Video Recording" to stop recording
-   - **Note**: Video recording requires an active voice chat session. Please start voice chat first before starting video recording.
+3. **停止录音**：
+   - 点击“停止录音”暂停语音输入
 
-## Switching Models
+4. **视频录制**（可选）：
+   - 点击“开始视频录制”按钮启动视频采集
+   - 按浏览器提示授权摄像头权限
+   - 系统会自动以每秒 1 帧（1 fps）的频率采集并上传视频帧
+   - 录制时会显示视频预览
+   - 点击“停止视频录制”结束采集
+   - **注意**：视频录制依赖已经建立的语音会话，请先启动语音对话再开始视频录制
 
-AgentScope supports multiple realtime voice models. By default, this example uses DashScope's `qwen3-omni-flash-realtime` model, but you can easily switch to other providers.
+## 切换模型
 
-### Supported Models
+AgentScope 支持多种实时语音模型。这个示例默认使用 DashScope 的 `qwen3-omni-flash-realtime`，但你也可以很方便地切换到其他提供商。
 
-- **GeminiRealtimeModel**
-- **OpenAIRealtimeModel**
+### 支持的模型
 
-### How to Switch Models
+- `GeminiRealtimeModel`
+- `OpenAIRealtimeModel`
 
-Edit `run_server.py` and replace the model initialization code:
+### 如何切换
 
-**For OpenAI:**
+编辑 `run_server.py`，替换模型初始化代码即可。
+
+**切换到 OpenAI：**
 
 ```python
 from agentscope.realtime import OpenAIRealtimeModel
@@ -91,12 +92,12 @@ agent = RealtimeAgent(
     model=OpenAIRealtimeModel(
         model_name="gpt-4o-realtime-preview",
         api_key=os.getenv("OPENAI_API_KEY"),
-        voice="alloy",  # Options: "alloy", "echo", "marin", "cedar"
+        voice="alloy",  # 可选值："alloy"、"echo"、"marin"、"cedar"
     ),
 )
 ```
 
-**For Gemini:**
+**切换到 Gemini：**
 
 ```python
 from agentscope.realtime import GeminiRealtimeModel
@@ -107,10 +108,9 @@ agent = RealtimeAgent(
     model=GeminiRealtimeModel(
         model_name="gemini-2.5-flash-native-audio-preview-09-2025",
         api_key=os.getenv("GEMINI_API_KEY"),
-        voice="Puck",  # Options: "Puck", "Charon", "Kore", "Fenrir"
+        voice="Puck",  # 可选值："Puck"、"Charon"、"Kore"、"Fenrir"
     ),
 )
 ```
 
-Don't forget to set the corresponding API key environment variable before starting the server!
-
+启动服务前不要忘记设置对应的 API Key 环境变量。
