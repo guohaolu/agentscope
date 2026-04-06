@@ -7,4 +7,7 @@
                  start-page="AgentScope Quickstart.md">
 
     <toc-element topic="AgentScope Quickstart.md"/>
+    <toc-element topic="agent示例总览.md"/>
+    <toc-element topic="agent示例中的Python语法.md"/>
+    <toc-element topic="agent示例中的AgentScope功能.md"/>
 </instance-profile>
