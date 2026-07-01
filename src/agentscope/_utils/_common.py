@@ -2,34 +2,64 @@
 """The common utilities for agentscope library."""
 import asyncio
 import base64
+import copy
 import functools
 import inspect
 import json
 import os
-import tempfile
 import types
-import typing
 import uuid
 from datetime import datetime
-from typing import Any, Callable, Type, Dict
-
-import numpy as np
-import requests
-from docstring_parser import parse
-from json_repair import repair_json
-from pydantic import BaseModel, Field, create_model, ConfigDict
+from typing import Any, Callable
 
 from .._logging import logger
-from ..types import ToolFunction
+from ..exception import ToolJSONDecodeError
 
-if typing.TYPE_CHECKING:
-    from mcp.types import Tool
-else:
-    Tool = "mcp.types.Tool"
+
+def _default_id_factory() -> str:
+    return uuid.uuid4().hex
+
+
+_id_factory: Callable[[], str] = _default_id_factory
+
+
+def set_id_factory(factory: Callable[[], str]) -> None:
+    """Override the global ID factory used by all AgentScope entities.
+
+    Entity IDs default to ``uuid.uuid4().hex``. Call this once at
+    startup to substitute a different strategy.
+
+    .. note::
+        Security-sensitive tokens (gateway tokens, Redis lock tokens)
+        are **not** affected and always use ``uuid.uuid4().hex``.
+
+    Args:
+        factory (`Callable[[], str]`):
+            A no-arg callable returning a string ID.
+
+    Raises:
+        TypeError: If ``factory`` is not callable.
+
+    Example:
+        >>> from agentscope import set_id_factory
+        >>> set_id_factory(lambda: uuid7().hex)
+    """
+    if not callable(factory):
+        raise TypeError(
+            f"factory must be a callable, got {type(factory).__name__}",
+        )
+    global _id_factory
+    _id_factory = factory
+
+
+def _generate_id() -> str:
+    """Generate an ID string using the current global ID factory."""
+    return _id_factory()
 
 
 def _json_loads_with_repair(
     json_str: str,
+    schema: dict | None = None,
 ) -> dict:
     """The given json_str maybe incomplete, e.g. '{"key', so we need to
     repair and load it into a Python object.
@@ -42,6 +72,8 @@ def _json_loads_with_repair(
     Args:
         json_str (`str`):
             The JSON string to parse, which may be incomplete or malformed.
+        schema (`dict`, optional):
+            An optional JSON schema to guide the repair process.
 
     Returns:
         `dict`:
@@ -49,58 +81,61 @@ def _json_loads_with_repair(
             Returns an empty dict if all repair attempts fail.
     """
     try:
-        repaired = repair_json(json_str, stream_stable=True)
-        result = json.loads(repaired)
-        if isinstance(result, dict):
-            return result
+        # Loads directly
+        res = json.loads(json_str)
+        if isinstance(res, dict):
+            return res
 
-    except Exception:
-        if len(json_str) > 100:
-            log_str = json_str[:100] + "..."
-        else:
-            log_str = json_str
-
-        logger.warning(
-            "Failed to load JSON dict from string: %s. Returning empty dict "
-            "instead.",
-            log_str,
+        error_message = (
+            f"Error: Your argument string is decoded into a {type(res)} "
+            f"object, but a dict object is expected!"
+        )
+    except json.JSONDecodeError as e:
+        error_message = (
+            f"Error: When decoding your tool arguments from JSON format "
+            f"to a Python dictionary, a JSONDecodeError was raised with "
+            f"message: {str(e)}."
         )
 
-    return {}
-
-
-def _parse_streaming_json_dict(
-    json_str: str,
-    last_input: dict | None = None,
-) -> dict:
-    """Parse a streaming JSON dict without regressing on incomplete chunks.
-
-    If the current chunk already forms a valid JSON dict, prefer it directly.
-    Otherwise, fall back to repaired JSON and keep the previous parsed value
-    only when repair would shrink the intermediate structure.
-    """
-    json_str = json_str or "{}"
     try:
-        result = json.loads(json_str)
-        if isinstance(result, dict):
-            return result
+        # Try to repair with json_repair
+        from json_repair import repair_json
+
+        repaired = repair_json(json_str, stream_stable=True, schema=schema)
+        res = json.loads(repaired)
+        if isinstance(res, dict):
+            return res
+
     except Exception:
+        # Whatever the error is, we throw the original error message to the
+        # agent, which is more helpful for debugging.
         pass
 
-    repaired_input = _json_loads_with_repair(json_str)
-    last_input = last_input or {}
-    if len(json.dumps(last_input)) > len(json.dumps(repaired_input)):
-        return last_input
-    return repaired_input
+    # If still failed, we throw the original error message to the agent, rather
+    # than the error from json_repair, which is less helpful for debugging.
+    if len(json_str) > 200:
+        error_json_str = json_str[:100] + "[TRUNCATE]" + json_str[-100:]
+        ellipsis_hint = (
+            "(Because the JSON string is too long, a truncated label "
+            '"[TRUNCATE]" is used here to indicate the truncation)'
+        )
+    else:
+        error_json_str = json_str
+        ellipsis_hint = ""
 
+    raise ToolJSONDecodeError(
+        f"""<system-reminder>{error_message}
 
-def _is_accessible_local_file(url: str) -> bool:
-    """Check if the given URL is a local URL."""
-    # First identify if it's an uri with 'file://' schema,
-    if url.startswith("file://"):
-        local_path = url.removeprefix("file://")
-        return os.path.isfile(local_path)
-    return os.path.isfile(url)
+Your argument string is decoded by the following code snippet{ellipsis_hint}:
+```python
+import json
+
+your_tool_arguments = {repr(error_json_str)}
+json.loads(your_tool_arguments)
+```
+
+**You should recorrect the arguments in JSON format.**</system-reminder>""",
+    )
 
 
 def _get_timestamp(add_random_suffix: bool = False) -> str:
@@ -168,6 +203,8 @@ def _get_bytes_from_web_url(
         max_retries (`int`, defaults to `3`):
             The maximum number of retries.
     """
+    import requests
+
     for _ in range(max_retries):
         try:
             response = requests.get(url)
@@ -189,139 +226,6 @@ def _get_bytes_from_web_url(
     )
 
 
-def _save_base64_data(
-    media_type: str,
-    base64_data: str,
-) -> str:
-    """Save the base64 data to a temp file and return the file path. The
-    extension is guessed from the MIME type.
-
-    Args:
-        media_type (`str`):
-            The MIME type of the data, e.g. "image/png", "audio/mpeg".
-        base64_data (`str`):
-            The base64 data to be saved.
-    """
-    extension = "." + media_type.split("/")[-1]
-
-    with tempfile.NamedTemporaryFile(
-        suffix=extension,
-        delete=False,
-    ) as temp_file:
-        decoded_data = base64.b64decode(base64_data)
-        temp_file.write(decoded_data)
-        return temp_file.name
-
-
-def _extract_json_schema_from_mcp_tool(tool: Tool) -> dict[str, Any]:
-    """Extract JSON schema from MCP tool."""
-
-    return {
-        "type": "function",
-        "function": {
-            "name": tool.name,
-            "description": tool.description,
-            "parameters": {
-                "type": "object",
-                "properties": tool.inputSchema.get(
-                    "properties",
-                    {},
-                ),
-                "required": tool.inputSchema.get(
-                    "required",
-                    [],
-                ),
-            },
-        },
-    }
-
-
-def _remove_title_field(schema: dict) -> None:
-    """Remove the title field from the JSON schema to avoid
-    misleading the LLM."""
-    # The top level title field
-    if "title" in schema:
-        schema.pop("title")
-
-    # properties
-    if "properties" in schema:
-        for prop in schema["properties"].values():
-            if isinstance(prop, dict):
-                _remove_title_field(prop)
-
-    # items
-    if "items" in schema and isinstance(schema["items"], dict):
-        _remove_title_field(schema["items"])
-
-    # additionalProperties
-    if "additionalProperties" in schema and isinstance(
-        schema["additionalProperties"],
-        dict,
-    ):
-        _remove_title_field(
-            schema["additionalProperties"],
-        )
-
-
-def _create_tool_from_base_model(
-    structured_model: Type[BaseModel],
-    tool_name: str = "generate_structured_output",
-) -> Dict[str, Any]:
-    """Create a function tool definition from a Pydantic BaseModel.
-    This function converts a Pydantic BaseModel class into a tool definition
-    that can be used with function calling API. The resulting tool
-    definition includes the model's JSON schema as parameters, enabling
-    structured output generation by forcing the model to call this function
-    with properly formatted data.
-
-    Args:
-        structured_model (`Type[BaseModel]`):
-            A Pydantic BaseModel class that defines the expected structure
-            for the tool's output.
-        tool_name (`str`, default `"generate_structured_output"`):
-            The tool name that used to force the LLM to generate structured
-            output by calling this function.
-
-    Returns:
-        `Dict[str, Any]`: A tool definition dictionary compatible with
-            function calling API, containing type ("function") and
-            function dictionary with name, description, and parameters
-            (JSON schema).
-
-    .. code-block:: python
-        :caption: Example usage
-
-        from pydantic import BaseModel
-
-        class PersonInfo(BaseModel):
-            name: str
-            age: int
-            email: str
-
-        tool = _create_tool_from_base_model(PersonInfo, "extract_person")
-        print(tool["function"]["name"])  # extract_person
-        print(tool["type"])              # function
-
-    .. note:: The function automatically removes the 'title' field from
-        the JSON schema to ensure compatibility with function calling
-        format. This is handled by the internal ``_remove_title_field()``
-        function.
-    """
-    schema = structured_model.model_json_schema()
-
-    _remove_title_field(schema)
-    tool_definition = {
-        "type": "function",
-        "function": {
-            "name": tool_name,
-            "description": "Generate the required structured output with "
-            "this function",
-            "parameters": schema,
-        },
-    }
-    return tool_definition
-
-
 def _map_text_to_uuid(text: str) -> str:
     """Map the given text to a deterministic UUID string.
 
@@ -336,167 +240,102 @@ def _map_text_to_uuid(text: str) -> str:
     return str(uuid.uuid3(uuid.NAMESPACE_DNS, text))
 
 
-def _parse_tool_function(
-    tool_func: ToolFunction,
-    include_long_description: bool,
-    include_var_positional: bool,
-    include_var_keyword: bool,
-) -> dict:
-    """Extract JSON schema from the tool function's docstring
+def _flatten_json_schema(schema: dict) -> dict:
+    """Flatten a JSON schema by resolving all local ``$ref`` references.
+
+    Some LLM providers (e.g. Gemini, GLM-5.x via OpenCode Go) cannot
+    process ``$defs`` / ``$ref`` patterns in tool parameter schemas.
+    When Pydantic generates schemas for complex nested types it emits a
+    ``$defs`` block (or the legacy ``definitions`` block) and refers to
+    it with ``{"$ref": "#/$defs/TypeName"}``.
+
+    This function resolves every such reference by substituting the full
+    definition inline, then drops the ``$defs`` / ``definitions``
+    sections so the output is a flat, self-contained schema.
+
+    Circular references are detected and replaced with a fallback object
+    schema to avoid infinite recursion.  Only local references of the
+    form ``#/$defs/<name>`` or ``#/definitions/<name>`` are expanded;
+    external ``$ref`` URLs are left unchanged.
 
     Args:
-        tool_func (`ToolFunction`):
-            The tool function to extract the JSON schema from.
-        include_long_description (`bool`):
-            Whether to include the long description in the JSON schema.
-        include_var_positional (`bool`):
-            Whether to include variable positional arguments in the JSON
-            schema.
-        include_var_keyword (`bool`):
-            Whether to include variable keyword arguments in the JSON schema.
+        schema (`dict`):
+            The JSON schema that may contain ``$defs`` and ``$ref``
+            references.
 
     Returns:
         `dict`:
-            The extracted JSON schema.
+            A flattened JSON schema with all references resolved inline.
     """
-    docstring = parse(tool_func.__doc__)
-    params_docstring = {_.arg_name: _.description for _ in docstring.params}
-
-    # Function description
-    descriptions = []
-    if docstring.short_description is not None:
-        descriptions.append(docstring.short_description)
-
-    if include_long_description and docstring.long_description is not None:
-        descriptions.append(docstring.long_description)
-
-    func_description = "\n".join(descriptions)
-
-    # Create a dynamic model with the function signature
-    fields = {}
-    for name, param in inspect.signature(tool_func).parameters.items():
-        # Skip the `self` and `cls` parameters
-        if name in ["self", "cls"]:
-            continue
-
-        # Handle `**kwargs`
-        if param.kind == inspect.Parameter.VAR_KEYWORD:
-            if not include_var_keyword:
-                continue
-
-            fields[name] = (
-                Dict[str, Any]
-                if param.annotation == inspect.Parameter.empty
-                else Dict[str, param.annotation],  # type: ignore
-                Field(
-                    description=params_docstring.get(
-                        f"**{name}",
-                        params_docstring.get(name, None),
-                    ),
-                    default={}
-                    if param.default is param.empty
-                    else param.default,
-                ),
-            )
-
-        elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-            if not include_var_positional:
-                continue
-
-            fields[name] = (
-                list[Any]
-                if param.annotation == inspect.Parameter.empty
-                else list[param.annotation],  # type: ignore
-                Field(
-                    description=params_docstring.get(
-                        f"*{name}",
-                        params_docstring.get(name, None),
-                    ),
-                    default=[]
-                    if param.default is param.empty
-                    else param.default,
-                ),
-            )
-
-        else:
-            fields[name] = (
-                Any
-                if param.annotation == inspect.Parameter.empty
-                else param.annotation,
-                Field(
-                    description=params_docstring.get(name, None),
-                    default=...
-                    if param.default is param.empty
-                    else param.default,
-                ),
-            )
-
-    base_model = create_model(
-        "_StructuredOutputDynamicClass",
-        __config__=ConfigDict(arbitrary_types_allowed=True),
-        **fields,
+    has_defs = isinstance(schema.get("$defs"), dict) or isinstance(
+        schema.get("definitions"),
+        dict,
     )
-    params_json_schema = base_model.model_json_schema()
+    if not has_defs:
+        return schema
 
-    # Remove the title from the json schema
-    _remove_title_field(params_json_schema)
+    schema = copy.deepcopy(schema)
+    defs: dict[str, Any] = {}
+    if isinstance(schema.get("$defs"), dict):
+        defs.update(schema.pop("$defs"))
+    if isinstance(schema.get("definitions"), dict):
+        defs.update(schema.pop("definitions"))
 
-    func_json_schema: dict = {
-        "type": "function",
-        "function": {
-            "name": tool_func.__name__,
-            "parameters": params_json_schema,
-        },
-    }
+    if not defs:
+        return schema
 
-    if func_description not in [None, ""]:
-        func_json_schema["function"]["description"] = func_description
+    def _resolve_ref(obj: Any, visited: frozenset = frozenset()) -> Any:
+        if isinstance(obj, list):
+            return [_resolve_ref(item, visited) for item in obj]
+        if not isinstance(obj, dict):
+            return obj
+        if "$ref" in obj:
+            ref_path = obj["$ref"]
+            if isinstance(ref_path, str) and (
+                ref_path.startswith("#/$defs/")
+                or ref_path.startswith("#/definitions/")
+            ):
+                def_name = ref_path.split("/")[-1]
+                if def_name in visited:
+                    logger.warning(
+                        "Circular reference detected for '%s' in tool "
+                        "schema",
+                        def_name,
+                    )
+                    return {
+                        "type": "object",
+                        "description": f"(circular: {def_name})",
+                    }
+                if def_name in defs:
+                    resolved = _resolve_ref(
+                        defs[def_name],
+                        visited | {def_name},
+                    )
+                    for key, value in obj.items():
+                        if key != "$ref":
+                            resolved[key] = _resolve_ref(
+                                value,
+                                visited | {def_name},
+                            )
+                    return resolved
+            return obj
+        result: dict[str, Any] = {}
+        for key, value in obj.items():
+            if key in ("$defs", "definitions"):
+                continue
+            result[key] = _resolve_ref(value, visited)
+        return result
 
-    return func_json_schema
+    return _resolve_ref(schema)
 
 
-def _resample_pcm_delta(
-    pcm_base64: str,
-    sample_rate: int,
-    target_rate: int,
-) -> str:
-    """Resampling the input pcm base64 data into the target rate.
+def _estimate_tokens(text: str) -> int:
+    """Estimate the number of tokens in a given text."""
 
-    Args:
-        pcm_base64 (`str`):
-            The input base64 audio data in pcm format.
-        sample_rate (`int`):
-            The sampling rate of the input data.
-        target_rate (`int`):
-            The target rate of the input data.
+    return int(len(text.encode("utf-8")) / 4 + 0.5)
 
-    Returns:
-        `str`:
-            The resampling base64 audio data in the required sampling
-            rate.
-    """
-    pcm_data = base64.b64decode(pcm_base64)
 
-    # Into numpy array first
-    audio_array = np.frombuffer(pcm_data, dtype=np.int16)
+def _estimate_bytes(tokens: int) -> int:
+    """Estimate the number of bytes with given tokens."""
 
-    # return directly if the same
-    if sample_rate == target_rate:
-        return pcm_base64
-
-    # compute the number of samples
-    num_samples = int(len(audio_array) * target_rate / sample_rate)
-
-    from scipy import signal
-
-    # Use scipy to resample
-    resampled_audio = signal.resample(audio_array, num_samples)
-
-    # Turn it back into bytes
-    resampled_audio = np.clip(resampled_audio, -32768, 32767).astype(np.int16)
-
-    # into base64
-    resampled_bytes = resampled_audio.tobytes()
-    resampled_base64 = base64.b64encode(resampled_bytes).decode("utf-8")
-
-    return resampled_base64
+    return int(tokens * 4)
