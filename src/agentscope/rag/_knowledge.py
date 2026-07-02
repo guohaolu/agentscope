@@ -382,3 +382,96 @@ class KnowledgeBase:
             self._collection,
             metadata_filter=self._metadata_filter,
         )
+
+    async def search_multiple(
+        self,
+        queries: list[str],
+        top_k: int = 5,
+        score_threshold: float | None = None,
+    ) -> list[VectorSearchResult]:
+        """Search the knowledge base with multiple queries, returning
+        the merged and deduplicated results.
+
+        All queries are embedded in a single batch, then searched
+        concurrently.  Hits are deduplicated by ``(document_id,
+        chunk_index)`` keeping the best score, optionally filtered by
+        ``score_threshold``, sorted by descending score, and truncated
+        to ``top_k``.
+
+        This is the multi-query equivalent of :meth:`search`.
+
+        Args:
+            queries (`list[str]`):
+                Multiple query strings to search across.
+            top_k (`int`, defaults to ``5``):
+                Maximum number of results after merging.
+            score_threshold (`float | None`, optional):
+                Minimum similarity score for a hit to be retained.
+
+        Returns:
+            `list[VectorSearchResult]`:
+                At most ``top_k`` deduplicated hits ordered by
+                descending similarity score.
+        """
+        return await self.search(queries, top_k=top_k, score_threshold=score_threshold)
+
+    async def search_multiple_grouped(
+        self,
+        queries: list[str],
+        top_k: int = 5,
+        score_threshold: float | None = None,
+    ) -> dict[str, list[VectorSearchResult]]:
+        """Search the knowledge base with multiple queries, returning
+        results grouped by each query.
+
+        Unlike :meth:`search_multiple` which merges and deduplicates
+        across all queries, this method preserves the per-query results
+        for downstream fusion strategies (e.g., RRF).
+
+        Args:
+            queries (`list[str]`):
+                Multiple query strings.
+            top_k (`int`, defaults to ``5``):
+                Maximum results per query.
+            score_threshold (`float | None`, optional):
+                Minimum similarity score for a hit to be retained.
+
+        Returns:
+            `dict[str, list[VectorSearchResult]]`:
+                Mapping from each query string to its retrieved results
+                (after dedup within that query, sorted by score,
+                truncated to ``top_k``).
+        """
+        if not queries:
+            return {}
+
+        await self.ensure_collection()
+
+        # Embed all queries in one batch
+        response = await self._embedding_model(queries)
+
+        if len(response.embeddings) != len(queries):
+            raise RuntimeError(
+                f"Embedding model returned {len(response.embeddings)} "
+                f"vectors for {len(queries)} queries.",
+            )
+
+        # Search each query vector independently
+        per_query_tasks = [
+            self._vector_store.search(
+                collection=self._collection,
+                query_vector=vector,
+                top_k=top_k,
+                metadata_filter=self._metadata_filter,
+            )
+            for vector in response.embeddings
+        ]
+        results_per_query = await asyncio.gather(*per_query_tasks)
+
+        grouped: dict[str, list[VectorSearchResult]] = {}
+        for query, results in zip(queries, results_per_query):
+            if score_threshold is not None:
+                results = [r for r in results if r.score >= score_threshold]
+            grouped[query] = sorted(results, key=lambda r: r.score, reverse=True)[:top_k]
+
+        return grouped

@@ -6,6 +6,7 @@ from ._document import (
     Section,
     Chunk,
 )
+from ._fusion import FusionStrategy, LLMFusionStrategy, RRFStrategy
 from ._parser import ImageParser, ParserBase, PDFParser, PPTParser, TextParser
 from ._vdb import (
     DocumentSummary,
@@ -21,10 +22,13 @@ __all__ = [
     "ChunkerBase",
     "Chunk",
     "DocumentSummary",
+    "FusionStrategy",
     "ImageParser",
+    "LLMFusionStrategy",
     "ParserBase",
     "PDFParser",
     "PPTParser",
+    "RRFStrategy",
     "TextParser",
     "Section",
     "VectorStoreBase",
